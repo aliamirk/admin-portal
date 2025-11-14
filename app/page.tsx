@@ -12,7 +12,7 @@ import {
   getGatePassPhotoFile,
 } from "../backend/admin";
 
-// Simple status/toast component
+// Simple status/toast component -----------------------
 function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
   if (!text) return null;
   const base = "px-4 py-3 rounded-lg text-sm max-w-full shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300";
