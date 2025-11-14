@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Base API URL
-const BASE_URL = "http://3.7.253.28:8000";
+const BASE_URL = "http://13.235.111.187:8000";
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -89,3 +89,43 @@ export const printGatepass = async (passNumber: string): Promise<Blob> => {
   });
   return response.data;
 };
+
+export async function getGatePassPhotos(
+  pass_number: string
+): Promise<{ photo_id: string; type: "exit" | "return" }[]> {
+  try {
+    const res = await api.get(`/gate/photos/${pass_number}`);
+
+    const data = res.data;
+
+    // If no photos array → return empty array
+    if (!data?.photos || !Array.isArray(data.photos)) {
+      return [];
+    }
+
+    // Map only required fields
+    return data.photos.map((p: any) => ({
+      photo_id: p.photo_id,
+      type: p.type,
+    }));
+
+  } catch (err: any) {
+    console.error("Error fetching gatepass photos:", err.response?.data || err);
+    throw err;
+  }
+}
+
+
+export async function getGatePassPhotoFile(
+  photo_id: string
+): Promise<Blob> {
+  try {
+    const res = await api.get(`/media/photo/${photo_id}`, {
+      responseType: "blob", // IMPORTANT!
+    });
+    return res.data;
+  } catch (err: any) {
+    console.error("Error fetching photo:", err.response?.data || err);
+    throw err;
+  }
+}
