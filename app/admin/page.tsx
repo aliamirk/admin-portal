@@ -464,6 +464,11 @@ export default function AdminGatepass() {
 
   // Handle print
   async function handlePrint(pass: GatePassOut) {
+    const pass_status = getGatepassDetail(pass.number.trim());
+    if ((await pass_status).status == "rejected"){
+      setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
+      return;
+    }
     try {
       setMessage({ type: "info", text: "Preparing download..." });
       const blob = await printGatepass(pass.number);
@@ -478,9 +483,8 @@ export default function AdminGatepass() {
       window.URL.revokeObjectURL(url);
       setMessage({ type: "success", text: `Downloaded ${filename}` });
     } catch (err: any) {
-      console.error(err);
       const text = err?.response?.data?.detail || err?.message || "Print failed";
-      setMessage({ type: "error", text: String(text) });
+      setMessage({ type: "error", text: "Gatepass cannot be printed until approved" });
     }
   }
 
