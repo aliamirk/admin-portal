@@ -584,6 +584,7 @@ export default function AdminGatepass() {
                         <option value="rejected">Rejected</option>
                         <option value="returned">Returned</option>
                         <option value="completed">Completed</option>
+                        <option value="pending_return">Pending Return</option>
                       </select>
                     </div>
 
