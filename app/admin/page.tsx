@@ -401,7 +401,7 @@ function AdminGatepassCard({
 }
 
 export default function AdminGatepass() {
-    useAuthCheck(["admin"]);
+    useAuthCheck(["omair", "obaid", "mubashir", "rehman", "nazim", "adil", "mustafa"]);
   const [passes, setPasses] = useState<GatePassOut[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
