@@ -802,7 +802,7 @@ export default function AdminGatepass() {
           </section>
 
           <footer className="text-xs text-gray-500 text-center py-4">
-            Admin Portal — Manage gatepasses efficiently
+          Gatepass Management • Made by @Prime AI 
           </footer>
         </main>
       </div>
