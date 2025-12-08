@@ -63,14 +63,19 @@ export const getGatepassDetail = async (passId: string): Promise<GatePassOut> =>
 };
 
 // 3. Approve Gatepass
-export const approveGatepass = async (passNumber: string): Promise<GatePassOut> => {
-  const response = await api.post<GatePassOut>(`/admin/gatepass/${passNumber}/approve`);
+export const approveGatepass = async (passNumber: string, role: string | null): Promise<GatePassOut> => {
+  const response = await api.post<GatePassOut>(`/admin/gatepass/${passNumber}/approve?name=${role}`);
   return response.data;
 };
 
 // 4. Reject Gatepass
-export const rejectGatepass = async (passNumber: string): Promise<GatePassOut> => {
-  const response = await api.post<GatePassOut>(`/admin/gatepass/${passNumber}/reject`);
+export const rejectGatepass = async (passNumber: string, role: string | null): Promise<GatePassOut> => {
+  const response = await api.post<GatePassOut>(`/admin/gatepass/${passNumber}/reject?name=${role}`);
+  return response.data;
+};
+
+export const deleteGatepass = async (passNumber: string, role: string | null): Promise<GatePassOut> => {
+  const response = await api.post<GatePassOut>(`/admin/gatepass/${passNumber}/delete?name=${role}`);
   return response.data;
 };
 

@@ -7,6 +7,7 @@ export default function useAuthCheck(allowedRoles: string[]) {
 
   useEffect(() => {
     const role = localStorage.getItem("role");
+    console.log("role: " + role)
 
     // Not logged in
     if (!role) {

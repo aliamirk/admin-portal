@@ -10,11 +10,13 @@ import {
   printGatepass,
   GatePassOut,
   getGatePassPhotoFile,
+  deleteGatepass,
 } from "../../backend/admin";
 import useAuthCheck from "@/lib/useAuthCheck";
 
 import { parseISO, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+import { p } from "framer-motion/client";
 
 function PKTDate({ dateString }: { dateString: any }) {
   try {
@@ -33,7 +35,6 @@ function PKTDate({ dateString }: { dateString: any }) {
     return <span className="text-xs text-gray-700">Not Available</span>;
   }
 }
-
 
 
 // Simple status/toast component -----------------------
@@ -61,7 +62,7 @@ function ConfirmModal({
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
-  type?: "approve" | "reject";
+  type?: "approve" | "reject" | "delete";
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
@@ -88,7 +89,7 @@ function ConfirmModal({
                   : "bg-gradient-to-r from-red-600 to-pink-600"
               }`}
             >
-              {type === "approve" ? "✓ Approve" : "✗ Reject"}
+              {type === "approve" ? "✓ Approve" : type === "reject" ? "✗ Reject" : type === "delete" ? " Delete" : null}
             </button>
           </div>
         </div>
@@ -330,8 +331,16 @@ function AdminGatepassCard({
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
               <div className="grid grid-cols-1 gap-2 text-xs">
                 <div className="p-2 rounded bg-white border border-green-100">
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created By</div>
-                  <p className="text-gray-700">{formatValue(pass.created_by)}</p>
+                  {
+                  pass.status == "rejected" ? 
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Rejected By</div> : 
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved By</div>
+                  }
+                  {
+                    pass.status_history[1] != undefined ?
+                    <p className="text-gray-700">{(pass.status_history[1].changed_by.toUpperCase())}</p> :
+                    <p className="text-gray-700">{("Not Approved")}</p>
+                  }
                 </div>
                 
                 <div className="p-2 rounded bg-white border border-green-100">
@@ -401,20 +410,29 @@ function AdminGatepassCard({
 }
 
 export default function AdminGatepass() {
-    useAuthCheck(["omair", "obaid", "mubashir", "rehman", "nazim", "adil", "mustafa"]);
+  useAuthCheck(["omair", "obaid", "mubashir", "rehman", "nazim", "adil", "mustafa"]);
   const [passes, setPasses] = useState<GatePassOut[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
+  
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRole(localStorage.getItem("role"));
+  }, []);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [numberFilter, setNumberFilter] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
+  const [showDelete, setShowDelete] = useState(true);
+  const [setDelete, setDeleteFn] = useState(false);
+
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
-    type: "approve" | "reject";
+    type: "approve" | "reject" | "delete";
     pass: GatePassOut | null;
   }>({ show: false, type: "approve", pass: null });
 
@@ -426,6 +444,23 @@ export default function AdminGatepass() {
 
   // Fetch all gatepasses
   async function fetchGatepasses(status?: string) {
+    setLoading(true);
+    setPasses(null);
+    try {
+      const res = await listAllGatepasses(status || null);
+      setPasses(res || []);
+      setMessage({ type: "success", text: `Loaded ${res.length} gatepass(es)` });
+    } catch (err: any) {
+      console.error(err);
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepasses";
+      setMessage({ type: "error", text: String(text) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Fetch all deleted gatepasses
+  async function fetchDeletedGatepasses(status?: string) {
     setLoading(true);
     setPasses(null);
     try {
@@ -490,9 +525,10 @@ export default function AdminGatepass() {
 
   // Handle approve
   async function handleApprove(pass: GatePassOut) {
+    if (role != null){
     try {
-      setMessage({ type: "info", text: "Approving gatepass..." });
-      const res = await approveGatepass(pass.number);
+      setMessage({ type: "info", text: `Approving gatepass by Admin: ${role}...` });
+      const res = await approveGatepass(pass.number, role);
       setMessage({ type: "success", text: `Gatepass ${res.number} approved successfully!` });
       // Refresh the list
       fetchGatepasses(statusFilter);
@@ -501,13 +537,17 @@ export default function AdminGatepass() {
       const text = err?.response?.data?.detail || err?.message || "Approval failed";
       setMessage({ type: "error", text: String(text) });
     }
+  } else {
+    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+  }
   }
 
   // Handle reject
   async function handleReject(pass: GatePassOut) {
+    if (role != null){
     try {
-      setMessage({ type: "info", text: "Rejecting gatepass..." });
-      const res = await rejectGatepass(pass.number);
+      setMessage({ type: "info", text: `Rejecting gatepass by Admin: ${role}...` });
+      const res = await rejectGatepass(pass.number, role);
       setMessage({ type: "success", text: `Gatepass ${res.number} rejected successfully!` });
       // Refresh the list
       fetchGatepasses(statusFilter);
@@ -516,6 +556,28 @@ export default function AdminGatepass() {
       const text = err?.response?.data?.detail || err?.message || "Rejection failed";
       setMessage({ type: "error", text: String(text) });
     }
+  } else {
+    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+  }
+  }
+
+  // Handle Delete
+  async function handleDelete(pass: GatePassOut) {
+    if (role != null){
+    try {
+      setMessage({ type: "info", text: `Deleting gatepass by Admin: ${role}...` });
+      const res = await deleteGatepass(pass.number, role);
+      setMessage({ type: "success", text: `Gatepass ${res.number} deleted successfully!` });
+      // Refresh the list
+      fetchGatepasses(statusFilter);
+    } catch (err: any) {
+      console.error(err);
+      const text = err?.response?.data?.detail || err?.message || "Deletion failed";
+      setMessage({ type: "error", text: String(text) });
+    }
+  } else {
+    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+  }
   }
 
   // Apply filters
@@ -526,6 +588,19 @@ export default function AdminGatepass() {
       fetchGatepasses(statusFilter || undefined);
     }
   }
+
+  async function deleteGP(){
+    const pass = numberFilter.trim();
+    console.log(pass)
+    try{
+      let p = await getGatepassDetail(pass);
+     setConfirmModal({ show: true, type: "delete", pass: p});
+    } catch {
+      setMessage({ type: "error", text: `Gatepass Not Found` });
+    }
+  }
+
+
 
   return (
     <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-green-50 via-white to-emerald-50">
@@ -562,7 +637,73 @@ export default function AdminGatepass() {
                 >
                   🔍 {showFilters ? "Hide Filters" : "Show Filters"}
                 </button>
+
+                {/* Push the following buttons to the right */}
+              <div className="flex gap-3 ml-auto">
+               <button
+                onClick={() => {
+                  setShowDelete(!showDelete);
+                  if (showDelete) {
+                    fetchDeletedGatepasses("deleted"); 
+                  } else {
+                    window.location.reload();
+                  }
+                }}
+                className="w-full sm:w-auto px-6 py-3 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-all duration-200 font-medium text-red-800"
+              >
+              {!showDelete ? "Hide Deleted" : "View Deleted"}
+              </button>
+              <button
+                onClick={() => setDeleteFn(!setDelete)}
+                className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+              >
+              Delete Gatepass
+              </button>
               </div>
+            </div>
+
+              {/* Delete Filter */}
+              {setDelete && (
+                <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <h3 className="font-semibold text-gray-700 mb-3">Delete Gatepass by ID</h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2">
+                  
+                    {/* Number Filter */}
+                    <div>
+                      <label className="block text-sm font-medium w-full text-gray-700 mb-2">Delete Gatepass</label>
+                      <input
+                        type="text"
+                        value={numberFilter}
+                        onChange={(e) => setNumberFilter(e.target.value)}
+                        placeholder="e.g. GP-2025-0001"
+                        className="w-full rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 justify-end pt-2">
+                    <button
+                      onClick={() => {
+                        setStatusFilter("");
+                        setNumberFilter("");
+                        setPasses(null);
+                      }}
+                      className="px-5 py-2 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium text-sm"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={deleteGP}
+                      className="px-5 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+
+
 
               {/* Filters Panel */}
               {showFilters && (
@@ -669,12 +810,22 @@ export default function AdminGatepass() {
       {/* Confirmation Modal */}
       {confirmModal.show && confirmModal.pass && (
         <ConfirmModal
-          title={confirmModal.type === "approve" ? "Approve Gatepass" : "Reject Gatepass"}
-          message={`Are you sure you want to ${confirmModal.type} gatepass ${confirmModal.pass.number} for ${confirmModal.pass.person_name}?`}
+        title={
+          confirmModal.type === "approve"
+            ? "Approve Gatepass"
+            : confirmModal.type === "reject"
+            ? "Reject Gatepass"
+            : confirmModal.type === "delete"
+            ? "Delete Gatepass"
+            : ""
+        }        
+          message={`Are you sure you want to ${confirmModal.type} gatepass ${confirmModal.pass.number} of Person:  ${confirmModal.pass.person_name}?`}
           type={confirmModal.type}
           onConfirm={() => {
             if (confirmModal.type === "approve") {
               handleApprove(confirmModal.pass!);
+            } else if (confirmModal.type == "delete") {
+              handleDelete(confirmModal.pass!);
             } else {
               handleReject(confirmModal.pass!);
             }
