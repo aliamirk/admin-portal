@@ -17,6 +17,7 @@ import useAuthCheck from "@/lib/useAuthCheck";
 import { parseISO, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { p } from "framer-motion/client";
+import { useRouter } from "next/navigation";
 
 function PKTDate({ dateString }: { dateString: any }) {
   try {
@@ -416,6 +417,7 @@ export default function AdminGatepass() {
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
   
   const [role, setRole] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setRole(localStorage.getItem("role"));
@@ -542,6 +544,10 @@ export default function AdminGatepass() {
   }
   }
 
+  function dashboardHandler(){
+    router.replace("/dashboard")
+  }
+
   // Handle reject
   async function handleReject(pass: GatePassOut) {
     if (role != null){
@@ -661,6 +667,12 @@ export default function AdminGatepass() {
               </button>
               </div>
             </div>
+            <button
+                onClick={() => dashboardHandler()}
+                className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-semibold hover:shadow-lg hover:scale-102 transition-all duration-200"
+              >
+              Dashboard and Analytics
+              </button>
 
               {/* Delete Filter */}
               {setDelete && (
