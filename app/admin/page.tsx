@@ -22,23 +22,15 @@ import { useRouter } from "next/navigation";
 function PKTDate({ dateString }: { dateString: any }) {
   try {
     if (!dateString) throw new Error("No date");
-
     const iso = dateString.endsWith("Z") ? dateString : dateString + "Z";
     const parsed = parseISO(iso);
-
-    const pkt = format(
-      toZonedTime(parsed, "Asia/Karachi"),
-      "dd/MM/yyyy HH:mm:ss"
-    );
-
+    const pkt = format(toZonedTime(parsed, "Asia/Karachi"), "dd/MM/yyyy HH:mm:ss");
     return <span className="text-xs text-gray-700">{pkt}</span>;
   } catch (e) {
     return <span className="text-xs text-gray-700">Not Available</span>;
   }
 }
 
-
-// Simple status/toast component -----------------------
 function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
   if (!text) return null;
   const base = "px-4 py-3 rounded-lg text-sm max-w-full shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300";
@@ -51,7 +43,6 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;
 }
 
-// Confirmation Modal
 function ConfirmModal({
   title,
   message,
@@ -99,7 +90,6 @@ function ConfirmModal({
   );
 }
 
-// Status History Modal
 function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
@@ -117,16 +107,13 @@ function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: ()
           {history && history.length > 0 ? (
             <div className="space-y-3">
               {history.map((h, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-lg bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100"
-                >
+                <div key={idx} className="p-4 rounded-lg bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
                       {h.status}
                     </span>
                     <span className="text-xs text-gray-500">
-                    <PKTDate dateString={h.changed_at} />
+                      <PKTDate dateString={h.changed_at} />
                     </span>
                   </div>
                   <div className="text-sm text-gray-600">
@@ -144,24 +131,15 @@ function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: ()
   );
 }
 
-function ImagePreviewModal({
-  imageId,
-  onClose,
-}: {
-  imageId: string;
-  onClose: () => void;
-}) {
+function ImagePreviewModal({ imageId, onClose }: { imageId: string; onClose: () => void }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-
     async function fetchImage() {
       try {
         const blob = await getGatePassPhotoFile(imageId);
-
         if (!isMounted) return;
-
         const url = URL.createObjectURL(blob);
         setImageUrl(url);
       } catch (error) {
@@ -169,9 +147,7 @@ function ImagePreviewModal({
         setImageUrl(null);
       }
     }
-
     fetchImage();
-
     return () => {
       isMounted = false;
       if (imageUrl) URL.revokeObjectURL(imageUrl);
@@ -190,14 +166,9 @@ function ImagePreviewModal({
             ✕ Close
           </button>
         </div>
-
         <div className="p-6 flex items-center justify-center bg-gray-50">
           {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt="Gatepass photo"
-              className="max-w-full max-h-[70vh] rounded-lg shadow-lg"
-            />
+            <img src={imageUrl} alt="Gatepass photo" className="max-w-full max-h-[70vh] rounded-lg shadow-lg" />
           ) : (
             <div className="text-gray-500 text-center">
               <img
@@ -213,7 +184,6 @@ function ImagePreviewModal({
   );
 }
 
-// Admin Gatepass Card Component
 function AdminGatepassCard({
   pass,
   onApprove,
@@ -243,7 +213,6 @@ function AdminGatepassCard({
   return (
     <>
       <article className="bg-gradient-to-br from-white to-green-50/30 rounded-xl shadow-md border-2 border-green-100 hover:shadow-xl transition-all duration-300 overflow-hidden">
-        {/* Compact Header */}
         <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-green-100">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -269,27 +238,22 @@ function AdminGatepassCard({
           </div>
         </div>
 
-        {/* Compact Body */}
         <div className="p-4 space-y-3">
-          {/* Key Info in Compact Grid */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-2 rounded bg-white border border-green-100">
               <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created</div>
               <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.created_at} /></p>
             </div>
-            
             <div className="p-2 rounded bg-white border border-green-100">
               <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Returnable</div>
               <p className="text-gray-700">{pass.is_returnable ? "✓ Yes" : "✗ No"}</p>
             </div>
-
             {pass.exit_time && (
               <div className="p-2 rounded bg-white border border-green-100">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Exit</div>
                 <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.exit_time} /></p>
               </div>
             )}
-
             {pass.return_time && (
               <div className="p-2 rounded bg-white border border-green-100">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Return</div>
@@ -298,7 +262,6 @@ function AdminGatepassCard({
             )}
           </div>
 
-          {/* Photos - Compact Row */}
           {(pass.exit_photo_id || pass.return_photo_id) && (
             <div className="flex gap-2">
               {pass.exit_photo_id && (
@@ -320,7 +283,6 @@ function AdminGatepassCard({
             </div>
           )}
 
-          {/* Collapsible Details */}
           <button
             onClick={() => setShowDetails(!showDetails)}
             className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-all duration-200 flex items-center justify-center gap-1"
@@ -332,28 +294,23 @@ function AdminGatepassCard({
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
               <div className="grid grid-cols-1 gap-2 text-xs">
                 <div className="p-2 rounded bg-white border border-green-100">
-                  {
-                  pass.status == "rejected" ? 
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Rejected By</div> : 
-                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved By</div>
+                  {pass.status == "rejected" ?
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Rejected By</div> :
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved By</div>
                   }
-                  {
-                    pass.status_history[1] != undefined ?
-                    <p className="text-gray-700">{(pass.status_history[1].changed_by.toUpperCase())}</p> :
-                    <p className="text-gray-700">{("Not Approved")}</p>
+                  {pass.status_history[1] != undefined ?
+                    <p className="text-gray-700">{pass.status_history[1].changed_by.toUpperCase()}</p> :
+                    <p className="text-gray-700">Not Approved</p>
                   }
                 </div>
-                
                 <div className="p-2 rounded bg-white border border-green-100">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved At</div>
                   <p className="text-gray-700"><PKTDate dateString={pass.approved_at} /></p>
                 </div>
-
                 <div className="p-2 rounded bg-white border border-green-100">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">QR Code</div>
                   <p className="text-gray-700">{formatValue(pass.qr_code_url)}</p>
                 </div>
-
                 <div className="p-2 rounded bg-white border border-green-100">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Gatepass ID</div>
                   <p className="text-gray-700 font-mono text-[10px] break-all">{pass.id}</p>
@@ -362,7 +319,6 @@ function AdminGatepassCard({
             </div>
           )}
 
-          {/* Action Buttons - Compact */}
           <div className="flex flex-wrap gap-2 pt-1">
             <button
               onClick={() => setShowHistory(true)}
@@ -378,7 +334,6 @@ function AdminGatepassCard({
             </button>
           </div>
 
-          {/* Admin Actions - Only show for pending */}
           {isPending && (
             <div className="flex gap-2 pt-1">
               <button
@@ -398,7 +353,6 @@ function AdminGatepassCard({
         </div>
       </article>
 
-      {/* Modals */}
       {showHistory && <StatusHistoryModal history={pass.status_history} onClose={() => setShowHistory(false)} />}
       {showExitPhoto && pass.exit_photo_id && (
         <ImagePreviewModal imageId={pass.exit_photo_id} onClose={() => setShowExitPhoto(false)} />
@@ -415,7 +369,7 @@ export default function AdminGatepass() {
   const [passes, setPasses] = useState<GatePassOut[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
-  
+
   const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
 
@@ -426,10 +380,10 @@ export default function AdminGatepass() {
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [numberFilter, setNumberFilter] = useState<string>("");
+  const [nameFilter, setNameFilter] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [showDelete, setShowDelete] = useState(true);
   const [setDelete, setDeleteFn] = useState(false);
-
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -444,7 +398,15 @@ export default function AdminGatepass() {
     return () => clearTimeout(t);
   }, [message]);
 
-  // Fetch all gatepasses
+  // Client-side name filter applied on top of fetched passes
+  const filteredPasses = passes
+    ? nameFilter.trim()
+      ? passes.filter((p) =>
+          p.person_name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+        )
+      : passes
+    : null;
+
   async function fetchGatepasses(status?: string) {
     setLoading(true);
     setPasses(null);
@@ -461,7 +423,6 @@ export default function AdminGatepass() {
     }
   }
 
-  // Fetch all deleted gatepasses
   async function fetchDeletedGatepasses(status?: string) {
     setLoading(true);
     setPasses(null);
@@ -478,7 +439,6 @@ export default function AdminGatepass() {
     }
   }
 
-  // Fetch gatepass by number
   async function fetchByNumber(number: string) {
     if (!number || number.trim().length === 0) {
       setMessage({ type: "error", text: "Please provide a gatepass number" });
@@ -499,10 +459,9 @@ export default function AdminGatepass() {
     }
   }
 
-  // Handle print
   async function handlePrint(pass: GatePassOut) {
     const pass_status = getGatepassDetail(pass.number.trim());
-    if ((await pass_status).status == "rejected"){
+    if ((await pass_status).status == "rejected") {
       setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
       return;
     }
@@ -520,73 +479,65 @@ export default function AdminGatepass() {
       window.URL.revokeObjectURL(url);
       setMessage({ type: "success", text: `Downloaded ${filename}` });
     } catch (err: any) {
-      const text = err?.response?.data?.detail || err?.message || "Print failed";
       setMessage({ type: "error", text: "Gatepass cannot be printed until approved" });
     }
   }
 
-  // Handle approve
   async function handleApprove(pass: GatePassOut) {
-    if (role != null){
-    try {
-      setMessage({ type: "info", text: `Approving gatepass by Admin: ${role}...` });
-      const res = await approveGatepass(pass.number, role);
-      setMessage({ type: "success", text: `Gatepass ${res.number} approved successfully!` });
-      // Refresh the list
-      fetchGatepasses(statusFilter);
-    } catch (err: any) {
-      console.error(err);
-      const text = err?.response?.data?.detail || err?.message || "Approval failed";
-      setMessage({ type: "error", text: String(text) });
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Approving gatepass by Admin: ${role}...` });
+        const res = await approveGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} approved successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Approval failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
     }
-  } else {
-    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
-  }
   }
 
-  function dashboardHandler(){
-    router.replace("/dashboard")
+  function dashboardHandler() {
+    router.replace("/dashboard");
   }
 
-  // Handle reject
   async function handleReject(pass: GatePassOut) {
-    if (role != null){
-    try {
-      setMessage({ type: "info", text: `Rejecting gatepass by Admin: ${role}...` });
-      const res = await rejectGatepass(pass.number, role);
-      setMessage({ type: "success", text: `Gatepass ${res.number} rejected successfully!` });
-      // Refresh the list
-      fetchGatepasses(statusFilter);
-    } catch (err: any) {
-      console.error(err);
-      const text = err?.response?.data?.detail || err?.message || "Rejection failed";
-      setMessage({ type: "error", text: String(text) });
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Rejecting gatepass by Admin: ${role}...` });
+        const res = await rejectGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} rejected successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Rejection failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
     }
-  } else {
-    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
-  }
   }
 
-  // Handle Delete
   async function handleDelete(pass: GatePassOut) {
-    if (role != null){
-    try {
-      setMessage({ type: "info", text: `Deleting gatepass by Admin: ${role}...` });
-      const res = await deleteGatepass(pass.number, role);
-      setMessage({ type: "success", text: `Gatepass ${res.number} deleted successfully!` });
-      // Refresh the list
-      fetchGatepasses(statusFilter);
-    } catch (err: any) {
-      console.error(err);
-      const text = err?.response?.data?.detail || err?.message || "Deletion failed";
-      setMessage({ type: "error", text: String(text) });
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Deleting gatepass by Admin: ${role}...` });
+        const res = await deleteGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} deleted successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Deletion failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
     }
-  } else {
-    setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
-  }
   }
 
-  // Apply filters
   function applyFilters() {
     if (numberFilter.trim()) {
       fetchByNumber(numberFilter);
@@ -595,18 +546,15 @@ export default function AdminGatepass() {
     }
   }
 
-  async function deleteGP(){
+  async function deleteGP() {
     const pass = numberFilter.trim();
-    console.log(pass)
-    try{
+    try {
       let p = await getGatepassDetail(pass);
-     setConfirmModal({ show: true, type: "delete", pass: p});
+      setConfirmModal({ show: true, type: "delete", pass: p });
     } catch {
       setMessage({ type: "error", text: `Gatepass Not Found` });
     }
   }
-
-
 
   return (
     <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-green-50 via-white to-emerald-50">
@@ -626,10 +574,8 @@ export default function AdminGatepass() {
         </section>
 
         <main className="space-y-6">
-          {/* Controls Section */}
           <section className="bg-white/80 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-xl border border-green-100">
             <div className="flex flex-col gap-4">
-              {/* Main Action Button */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => fetchGatepasses()}
@@ -643,45 +589,63 @@ export default function AdminGatepass() {
                 >
                   🔍 {showFilters ? "Hide Filters" : "Show Filters"}
                 </button>
-
-                {/* Push the following buttons to the right */}
-              <div className="flex gap-3 ml-auto">
-               <button
-                onClick={() => {
-                  setShowDelete(!showDelete);
-                  if (showDelete) {
-                    fetchDeletedGatepasses("deleted"); 
-                  } else {
-                    window.location.reload();
-                  }
-                }}
-                className="w-full sm:w-auto px-6 py-3 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-all duration-200 font-medium text-red-800"
-              >
-              {!showDelete ? "Hide Deleted" : "View Deleted"}
-              </button>
-              <button
-                onClick={() => setDeleteFn(!setDelete)}
-                className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
-              >
-              Delete Gatepass
-              </button>
+                <div className="flex gap-3 ml-auto">
+                  <button
+                    onClick={() => {
+                      setShowDelete(!showDelete);
+                      if (showDelete) {
+                        fetchDeletedGatepasses("deleted");
+                      } else {
+                        window.location.reload();
+                      }
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-all duration-200 font-medium text-red-800"
+                  >
+                    {!showDelete ? "Hide Deleted" : "View Deleted"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteFn(!setDelete)}
+                    className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+                  >
+                    Delete Gatepass
+                  </button>
+                </div>
               </div>
-            </div>
-            <button
+
+              <button
                 onClick={() => dashboardHandler()}
                 className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-semibold hover:shadow-lg hover:scale-102 transition-all duration-200"
               >
-              Dashboard and Analytics
+                Dashboard and Analytics
               </button>
 
-              {/* Delete Filter */}
+              {/* Name Search — always visible once passes are loaded */}
+              {passes && passes.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      placeholder="Search by person name..."
+                      className="w-full rounded-lg border-2 border-emerald-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                    />
+                  </div>
+                  {nameFilter && (
+                    <button
+                      onClick={() => setNameFilter("")}
+                      className="px-4 py-2.5 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 text-sm font-medium"
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
+                </div>
+              )}
+
               {setDelete && (
                 <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <h3 className="font-semibold text-gray-700 mb-3">Delete Gatepass by ID</h3>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2">
-                  
-                    {/* Number Filter */}
                     <div>
                       <label className="block text-sm font-medium w-full text-gray-700 mb-2">Delete Gatepass</label>
                       <input
@@ -693,14 +657,9 @@ export default function AdminGatepass() {
                       />
                     </div>
                   </div>
-
                   <div className="flex gap-3 justify-end pt-2">
                     <button
-                      onClick={() => {
-                        setStatusFilter("");
-                        setNumberFilter("");
-                        setPasses(null);
-                      }}
+                      onClick={() => { setStatusFilter(""); setNumberFilter(""); setPasses(null); }}
                       className="px-5 py-2 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium text-sm"
                     >
                       Clear
@@ -715,21 +674,16 @@ export default function AdminGatepass() {
                 </div>
               )}
 
-
-
-              {/* Filters Panel */}
               {showFilters && (
                 <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <h3 className="font-semibold text-gray-700 mb-3">Filter Gatepasses</h3>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Status Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Status</label>
                       <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full rounded-lg border-2 border-gray-00 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                        className="w-full rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
                       >
                         <option value="">All Statuses</option>
                         <option value="pending">Pending</option>
@@ -740,8 +694,6 @@ export default function AdminGatepass() {
                         <option value="pending_return">Pending Return</option>
                       </select>
                     </div>
-
-                    {/* Number Filter */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Number</label>
                       <input
@@ -753,14 +705,9 @@ export default function AdminGatepass() {
                       />
                     </div>
                   </div>
-
                   <div className="flex gap-3 justify-end pt-2">
                     <button
-                      onClick={() => {
-                        setStatusFilter("");
-                        setNumberFilter("");
-                        setPasses(null);
-                      }}
+                      onClick={() => { setStatusFilter(""); setNumberFilter(""); setPasses(null); }}
                       className="px-5 py-2 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium text-sm"
                     >
                       Clear
@@ -777,7 +724,6 @@ export default function AdminGatepass() {
             </div>
           </section>
 
-          {/* Results Section */}
           <section>
             {loading && (
               <div className="text-center py-12">
@@ -786,26 +732,29 @@ export default function AdminGatepass() {
               </div>
             )}
 
-            {!loading && passes && passes.length === 0 && (
+            {!loading && filteredPasses && filteredPasses.length === 0 && (
               <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-green-100">
                 <div className="text-6xl mb-4">📭</div>
-                <p className="text-xl text-gray-600 font-medium">No gatepasses found</p>
+                <p className="text-xl text-gray-600 font-medium">
+                  {nameFilter ? `No gatepasses found for "${nameFilter}"` : "No gatepasses found"}
+                </p>
                 <p className="text-sm text-gray-500 mt-2">Try adjusting your filters or create a new gatepass</p>
               </div>
             )}
 
-            {!loading && passes && passes.length > 0 && (
+            {!loading && filteredPasses && filteredPasses.length > 0 && (
               <div className="space-y-6">
-                {passes.map((pass) => (
+                {nameFilter && (
+                  <p className="text-sm text-gray-500 text-center">
+                    Showing {filteredPasses.length} of {passes?.length} gatepass(es) matching "{nameFilter}"
+                  </p>
+                )}
+                {filteredPasses.map((pass) => (
                   <AdminGatepassCard
                     key={pass.id}
                     pass={pass}
-                    onApprove={(p) =>
-                      setConfirmModal({ show: true, type: "approve", pass: p })
-                    }
-                    onReject={(p) =>
-                      setConfirmModal({ show: true, type: "reject", pass: p })
-                    }
+                    onApprove={(p) => setConfirmModal({ show: true, type: "approve", pass: p })}
+                    onReject={(p) => setConfirmModal({ show: true, type: "reject", pass: p })}
                     onPrint={handlePrint}
                   />
                 ))}
@@ -814,29 +763,26 @@ export default function AdminGatepass() {
           </section>
 
           <footer className="text-xs text-gray-500 text-center py-4">
-          Gatepass Management • Made by @Prime AI 
+            Gatepass Management • Made by @Prime AI
           </footer>
         </main>
       </div>
 
-      {/* Confirmation Modal */}
       {confirmModal.show && confirmModal.pass && (
         <ConfirmModal
-        title={
-          confirmModal.type === "approve"
-            ? "Approve Gatepass"
-            : confirmModal.type === "reject"
-            ? "Reject Gatepass"
-            : confirmModal.type === "delete"
-            ? "Delete Gatepass"
-            : ""
-        }        
-          message={`Are you sure you want to ${confirmModal.type} gatepass ${confirmModal.pass.number} of Person:  ${confirmModal.pass.person_name}?`}
+          title={
+            confirmModal.type === "approve"
+              ? "Approve Gatepass"
+              : confirmModal.type === "reject"
+              ? "Reject Gatepass"
+              : "Delete Gatepass"
+          }
+          message={`Are you sure you want to ${confirmModal.type} gatepass ${confirmModal.pass.number} of Person: ${confirmModal.pass.person_name}?`}
           type={confirmModal.type}
           onConfirm={() => {
             if (confirmModal.type === "approve") {
               handleApprove(confirmModal.pass!);
-            } else if (confirmModal.type == "delete") {
+            } else if (confirmModal.type === "delete") {
               handleDelete(confirmModal.pass!);
             } else {
               handleReject(confirmModal.pass!);
