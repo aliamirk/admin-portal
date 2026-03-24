@@ -399,10 +399,13 @@ export default function AdminGatepass() {
   }, [message]);
 
   // Client-side name filter applied on top of fetched passes
+  const query = nameFilter.trim().toLowerCase();
+
   const filteredPasses = passes
-    ? nameFilter.trim()
+    ? query
       ? passes.filter((p) =>
-          p.person_name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+          p.person_name.toLowerCase().includes(query) ||
+          p.description.toLowerCase().includes(query)
         )
       : passes
     : null;
