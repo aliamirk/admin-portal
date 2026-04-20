@@ -12,7 +12,9 @@ export const users = [
     { username: "nazim", password: "nazim@33#", redirect: "/admin" },
     { username: "rehman", password: "rehman@54#", redirect: "/admin" },
     { username: "mustafa", password: "mustafa#4@1", redirect: "/admin" },
-    { username: "adil", password: "adil#28$", redirect: "/admin" }
+    { username: "adil", password: "adil#28$", redirect: "/admin" },
+    { username: "aqil", password: "aqil$#$374", redirect: "/admin" },
+    { username: "ammar", password: "ammar$#$930", redirect: "/admin" }
   ];
   
   export const authenticate = (username: string, password: string) => {
