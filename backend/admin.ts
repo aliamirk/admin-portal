@@ -79,6 +79,14 @@ export const deleteGatepass = async (passNumber: string, role: string | null): P
   return response.data;
 };
 
+// 5a. Search Gatepasses by name (indexed search)
+export const searchGatepasses = async (query: string): Promise<GatePassOut[]> => {
+  const response = await api.get<GatePassOut[]>("/hr/indexed/search", {
+    params: { q: query },
+  });
+  return response.data;
+};
+
 // 5. List All Gatepasses
 export const listAllGatepasses = async (status?: string | null): Promise<GatePassOut[]> => {
   const response = await api.get<GatePassOut[]>("/hr/gatepass/list", {

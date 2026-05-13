@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  getPendingGatepasses,
   getGatepassDetail,
   approveGatepass,
   rejectGatepass,
   listAllGatepasses,
+  searchGatepasses,
   printGatepass,
   GatePassOut,
   getGatePassPhotoFile,
@@ -16,7 +16,6 @@ import useAuthCheck from "@/lib/useAuthCheck";
 
 import { parseISO, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { p } from "framer-motion/client";
 import { useRouter } from "next/navigation";
 
 function PKTDate({ dateString }: { dateString: any }) {
@@ -381,9 +380,48 @@ export default function AdminGatepass() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [numberFilter, setNumberFilter] = useState<string>("");
   const [nameFilter, setNameFilter] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<GatePassOut[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showDelete, setShowDelete] = useState(true);
   const [setDelete, setDeleteFn] = useState(false);
+
+  // Debounced name search — fires 500ms after the user stops typing
+  useEffect(() => {
+    if (!nameFilter.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchGatepasses(nameFilter.trim());
+        // API returns a bare array; guard against accidental envelope wrapping
+        const results: GatePassOut[] = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        setSearchResults(results);
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail;
+        const text =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+            ? detail.map((d: any) => d.msg ?? JSON.stringify(d)).join(", ")
+            : err?.message ?? "Search failed";
+        setMessage({ type: "error", text });
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nameFilter]);
+
+  // What to render in the results section
+  const displayedPasses = nameFilter.trim() ? searchResults : passes;
+
+  // Pagination — reset to 10 whenever the result set changes
+  const [visibleCount, setVisibleCount] = useState(10);
+  useEffect(() => { setVisibleCount(10); }, [displayedPasses]);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -397,18 +435,6 @@ export default function AdminGatepass() {
     const t = setTimeout(() => setMessage(null), 5000);
     return () => clearTimeout(t);
   }, [message]);
-
-  // Client-side name filter applied on top of fetched passes
-  const query = nameFilter.trim().toLowerCase();
-
-  const filteredPasses = passes
-    ? query
-      ? passes.filter((p) =>
-          p.person_name.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query)
-        )
-      : passes
-    : null;
 
   async function fetchGatepasses(status?: string) {
     setLoading(true);
@@ -622,28 +648,34 @@ export default function AdminGatepass() {
                 Dashboard and Analytics
               </button>
 
-              {/* Name Search — always visible once passes are loaded */}
-              {passes && passes.length > 0 && (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={nameFilter}
-                      onChange={(e) => setNameFilter(e.target.value)}
-                      placeholder="Search by person name..."
-                      className="w-full rounded-lg border-2 border-emerald-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
-                    />
-                  </div>
-                  {nameFilter && (
-                    <button
-                      onClick={() => setNameFilter("")}
-                      className="px-4 py-2.5 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 text-sm font-medium"
-                    >
-                      ✕ Clear
-                    </button>
+              {/* Name Search — always visible, queries the API with debounce */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                    placeholder="Search by person name or description (searches all gatepasses)..."
+                    className="w-full rounded-lg border-2 border-emerald-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none pr-10"
+                  />
+                  {searchLoading && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="animate-spin h-4 w-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                    </span>
                   )}
                 </div>
-              )}
+                {nameFilter && (
+                  <button
+                    onClick={() => setNameFilter("")}
+                    className="px-4 py-2.5 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 text-sm font-medium"
+                  >
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
 
               {setDelete && (
                 <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
@@ -735,7 +767,7 @@ export default function AdminGatepass() {
               </div>
             )}
 
-            {!loading && filteredPasses && filteredPasses.length === 0 && (
+            {!loading && displayedPasses && displayedPasses.length === 0 && (
               <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-green-100">
                 <div className="text-6xl mb-4">📭</div>
                 <p className="text-xl text-gray-600 font-medium">
@@ -745,14 +777,14 @@ export default function AdminGatepass() {
               </div>
             )}
 
-            {!loading && filteredPasses && filteredPasses.length > 0 && (
+            {!loading && displayedPasses && displayedPasses.length > 0 && (
               <div className="space-y-6">
                 {nameFilter && (
                   <p className="text-sm text-gray-500 text-center">
-                    Showing {filteredPasses.length} of {passes?.length} gatepass(es) matching "{nameFilter}"
+                    Showing {Math.min(visibleCount, displayedPasses.length)} of {displayedPasses.length} gatepass(es) matching "{nameFilter}"
                   </p>
                 )}
-                {filteredPasses.map((pass) => (
+                {displayedPasses.slice(0, visibleCount).map((pass) => (
                   <AdminGatepassCard
                     key={pass.id}
                     pass={pass}
@@ -761,6 +793,19 @@ export default function AdminGatepass() {
                     onPrint={handlePrint}
                   />
                 ))}
+                {visibleCount < displayedPasses.length && (
+                  <div className="flex flex-col items-center gap-2 pt-2">
+                    <p className="text-sm text-gray-500">
+                      Showing {visibleCount} of {displayedPasses.length} gatepasses
+                    </p>
+                    <button
+                      onClick={() => setVisibleCount((c) => c + 10)}
+                      className="px-8 py-3 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+                    >
+                      Show More
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
