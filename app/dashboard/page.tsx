@@ -5,6 +5,7 @@ import { BarChart3, CheckCircle, XCircle, Clock, Users, FileText, QrCode, LogOut
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import ReturnButton from '@/components/ReturnButton';
 import { useCountUp } from '@/lib/useCountUp';
+import { getAnalytics, AnalyticsData } from '../../backend/admin';
 
 // Types based on OpenAPI spec
 interface StatusHistoryItem {
@@ -126,7 +127,7 @@ const api = {
   }
 };
 
-const INITIAL_STATS = {
+const INITIAL_STATS: AnalyticsData = {
   total: 0,
   pending: 0,
   approved: 0,
@@ -136,30 +137,6 @@ const INITIAL_STATS = {
   pending_return: 0,
 }
 
-export function useInitialStats(gatePasses: GatePass[]) {
-  const hasRun = useRef(false)
-  const [stats, setStats] = useState(INITIAL_STATS)
-
-  useEffect(() => {
-    if (hasRun.current) return
-    if (!gatePasses || gatePasses.length === 0) return
-
-    const result = { ...INITIAL_STATS }
-
-    for (const p of gatePasses) {
-      result.total++
-      if (p.status in result) {
-        // @ts-ignore
-        result[p.status]++
-      }
-    }
-
-    setStats(result)
-    hasRun.current = true
-  }, [gatePasses])
-
-  return stats
-}
 
 // Status Badge Component
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -237,6 +214,8 @@ const GatePassDashboard: React.FC = () => {
 
   const [username, setUsername] = useState<string | null>(null);
 
+  const [analytics, setAnalytics] = useState<AnalyticsData>(INITIAL_STATS);
+
   useEffect(() => {
     setUsername(localStorage.getItem("role"));
   }, []);
@@ -258,29 +237,32 @@ const GatePassDashboard: React.FC = () => {
     setError(null);
     try {
       let data: GatePass[] = [];
-    
-        // Use real API
-        if (role === 'admin') {
-          if (selectedStatus === 'all' || !selectedStatus) {
-            data = await api.admin.getAll();
-          } else {
-            data = await api.admin.getAll(selectedStatus);
-          }
-        } else if (role === 'hr') {
-          if (selectedStatus === 'all' || !selectedStatus) {
-            data = await api.hr.list();
-          } else {
-            data = await api.hr.list(selectedStatus);
-          }
-        } else if (role === 'gate') {
-          data = await api.admin.getAll(); // Gate can see all for recent scans
-        
+
+      // Fetch analytics and gatepass list in parallel
+      const [analyticsData] = await Promise.all([
+        getAnalytics(),
+      ]);
+      setAnalytics(analyticsData);
+
+      if (role === 'admin') {
+        if (selectedStatus === 'all' || !selectedStatus) {
+          data = await api.admin.getAll();
+        } else {
+          data = await api.admin.getAll(selectedStatus);
+        }
+      } else if (role === 'hr') {
+        if (selectedStatus === 'all' || !selectedStatus) {
+          data = await api.hr.list();
+        } else {
+          data = await api.hr.list(selectedStatus);
+        }
+      } else if (role === 'gate') {
+        data = await api.admin.getAll();
       }
       setGatePasses(data);
     } catch (error) {
       console.error('Error loading data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load data');
-      // Fallback to mock data on error
     } finally {
       setLoading(false);
     }
@@ -298,25 +280,14 @@ const GatePassDashboard: React.FC = () => {
     setDisplayCount(prev => Math.min(prev + ITEMS_PER_PAGE, filteredPasses.length));
   };
 
-  const stats = {
-    total: gatePasses.length,
-    pending: gatePasses.filter(p => p.status === 'pending').length,
-    approved: gatePasses.filter(p => p.status === 'approved').length,
-    rejected: gatePasses.filter(p => p.status === 'rejected').length,
-    completed: gatePasses.filter(p => ['completed'].includes(p.status)).length,
-    returned: gatePasses.filter(p => p.status === 'returned').length,
-    pending_return: gatePasses.filter(p => p.status === 'pending_return').length
-  };
-
-  const stats_gatepasses = useInitialStats(gatePasses);
-
-
+  // Stats come directly from the /hr/analytics endpoint
   const statusDistribution = [
-    { name: 'Pending', value: stats.pending, color: '#fbbf24' },
-    { name: 'Approved', value: stats.approved, color: '#10b981' },
-    { name: 'Rejected', value: stats.rejected, color: '#ef4444' },
-    { name: 'Active', value: stats.completed, color: '#3b82f6' },
-    { name: 'Returned', value: stats.returned, color: '#059669' }
+    { name: 'Pending', value: analytics.pending, color: '#fbbf24' },
+    { name: 'Approved', value: analytics.approved, color: '#10b981' },
+    { name: 'Rejected', value: analytics.rejected, color: '#ef4444' },
+    { name: 'Completed', value: analytics.completed, color: '#3b82f6' },
+    { name: 'Returned', value: analytics.returned, color: '#059669' },
+    { name: 'Pending Return', value: analytics.pending_return, color: '#f97316' },
   ];
 
 // Calculate daily trend from actual gatepass data (last 7 days)
@@ -488,15 +459,15 @@ const dailyTrend = (() => {
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <KPICard title="Total" value={stats_gatepasses.total} icon={<FileText className="w-6 h-6 text-gray-600" />} color="bg-gray-100" />
-              <KPICard title="Pending" value={stats_gatepasses.pending} icon={<Clock className="w-6 h-6 text-yellow-600" />} color="bg-yellow-100" />
-              <KPICard title="Approved" value={stats_gatepasses.approved} icon={<CheckCircle className="w-6 h-6 text-emerald-600" />} color="bg-emerald-100" />
-              <KPICard title="Rejected" value={stats_gatepasses.rejected} icon={<XCircle className="w-6 h-6 text-red-600" />} color="bg-red-100" />
-              <KPICard title="Completed" value={stats_gatepasses.completed} icon={<Users className="w-6 h-6 text-blue-600" />} color="bg-blue-100" />
+              <KPICard title="Total" value={analytics.total} icon={<FileText className="w-6 h-6 text-gray-600" />} color="bg-gray-100" />
+              <KPICard title="Pending" value={analytics.pending} icon={<Clock className="w-6 h-6 text-yellow-600" />} color="bg-yellow-100" />
+              <KPICard title="Approved" value={analytics.approved} icon={<CheckCircle className="w-6 h-6 text-emerald-600" />} color="bg-emerald-100" />
+              <KPICard title="Rejected" value={analytics.rejected} icon={<XCircle className="w-6 h-6 text-red-600" />} color="bg-red-100" />
+              <KPICard title="Completed" value={analytics.completed} icon={<Users className="w-6 h-6 text-blue-600" />} color="bg-blue-100" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-              <KPICard title="Pending Return" value={stats_gatepasses.pending_return} icon={<Undo2 className="w-6 h-6 text-red-600" />} color="bg-red-100" />
-              <KPICard title="Returned Gate Passes" value={stats_gatepasses.returned} icon={<CheckCircle className="w-6 h-6 text-green-600" />} color="bg-green-100" />
+              <KPICard title="Pending Return" value={analytics.pending_return} icon={<Undo2 className="w-6 h-6 text-red-600" />} color="bg-red-100" />
+              <KPICard title="Returned Gate Passes" value={analytics.returned} icon={<CheckCircle className="w-6 h-6 text-green-600" />} color="bg-green-100" />
             </div>
 
             {/* Charts */}

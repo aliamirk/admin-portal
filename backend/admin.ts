@@ -87,6 +87,22 @@ export const searchGatepasses = async (query: string): Promise<GatePassOut[]> =>
   return response.data;
 };
 
+// Analytics
+export interface AnalyticsData {
+  pending: number;
+  approved: number;
+  completed: number;
+  rejected: number;
+  pending_return: number;
+  total: number;
+  returned: number;
+}
+
+export const getAnalytics = async (): Promise<AnalyticsData> => {
+  const response = await api.get<AnalyticsData>("/hr/analytics");
+  return response.data;
+};
+
 // 5. List All Gatepasses
 export const listAllGatepasses = async (status?: string | null): Promise<GatePassOut[]> => {
   const response = await api.get<GatePassOut[]>("/hr/gatepass/list", {
