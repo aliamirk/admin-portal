@@ -39,7 +39,7 @@ interface GatePassCreate {
 }
 
 // Production API Base URL
-const API_BASE = 'https://gatepass-api.cushtello.shop';
+const API_BASE = 'https://gatepass-api.pakeezah.net';
 // const API_BASE = 'http://localhost:8000';
 
 

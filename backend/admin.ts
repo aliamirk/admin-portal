@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Base API URL
-const BASE_URL = "https://gatepass-api.cushtello.shop";
+const BASE_URL = "https://gatepass-api.pakeezah.net";
 
 const api = axios.create({
   baseURL: BASE_URL,
