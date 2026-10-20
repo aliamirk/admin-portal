@@ -7,16 +7,18 @@ export default function useAuthCheck(allowedRoles: string[]) {
 
   useEffect(() => {
     const role = localStorage.getItem("role");
-    console.log("role: " + role)
+    const username = localStorage.getItem("username");
 
-    // Not logged in
-    if (!role) {
+    if (!role && !username) {
       router.replace("/login");
       return;
     }
 
-    // Role not allowed
-    if (!allowedRoles.includes(role)) {
+    const isAllowed =
+      (role && allowedRoles.includes(role)) ||
+      (username && allowedRoles.includes(username));
+
+    if (!isAllowed) {
       router.replace("/login");
     }
   }, [router, allowedRoles]);
