@@ -44,6 +44,8 @@ export default function LoginPage() {
         return;
       }
 
+      localStorage.setItem("role", "admin");
+      localStorage.setItem("username", username.toLowerCase());
       router.push(user.redirect);
     } catch (err) {
       console.error("⚠️ Login error:", err);
