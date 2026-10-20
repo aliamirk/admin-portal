@@ -1,0 +1,845 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  getGatepassDetail,
+  approveGatepass,
+  rejectGatepass,
+  listAllGatepasses,
+  searchGatepasses,
+  printGatepass,
+  GatePassOut,
+  getGatePassPhotoFile,
+  deleteGatepass,
+} from "../../backend/admin";
+import useAuthCheck from "@/lib/useAuthCheck";
+
+import { parseISO, format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { useRouter } from "next/navigation";
+
+function PKTDate({ dateString }: { dateString: any }) {
+  try {
+    if (!dateString) throw new Error("No date");
+    const iso = dateString.endsWith("Z") ? dateString : dateString + "Z";
+    const parsed = parseISO(iso);
+    const pkt = format(toZonedTime(parsed, "Asia/Karachi"), "dd/MM/yyyy HH:mm:ss");
+    return <span className="text-xs text-gray-700">{pkt}</span>;
+  } catch (e) {
+    return <span className="text-xs text-gray-700">Not Available</span>;
+  }
+}
+
+function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
+  if (!text) return null;
+  const base = "px-4 py-3 rounded-lg text-sm max-w-full shadow-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300";
+  const cls =
+    type === "error"
+      ? "bg-red-50/90 text-red-800 border border-red-200"
+      : type === "success"
+      ? "bg-emerald-50/90 text-emerald-800 border border-emerald-200"
+      : "bg-green-50/90 text-green-800 border border-green-200";
+  return <div className={`${base} ${cls}`}>{text}</div>;
+}
+
+function ConfirmModal({
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  type = "approve",
+}: {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  type?: "approve" | "reject" | "delete";
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
+        <div className={`p-6 border-b-2 ${type === "approve" ? "border-green-100 bg-gradient-to-r from-emerald-50 to-green-50" : "border-red-100 bg-gradient-to-r from-red-50 to-pink-50"}`}>
+          <h3 className={`text-xl font-bold ${type === "approve" ? "text-emerald-800" : "text-red-800"}`}>
+            {title}
+          </h3>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-700 mb-6">{message}</p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={onCancel}
+              className="px-5 py-2.5 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className={`px-5 py-2.5 rounded-lg text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200 ${
+                type === "approve"
+                  ? "bg-gradient-to-r from-emerald-600 to-green-600"
+                  : "bg-gradient-to-r from-red-600 to-pink-600"
+              }`}
+            >
+              {type === "approve" ? "✓ Approve" : type === "reject" ? "✗ Reject" : type === "delete" ? " Delete" : null}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b-2 border-green-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-green-50">
+          <h3 className="text-xl font-bold text-emerald-800">Status History</h3>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium"
+          >
+            ✕ Close
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto max-h-[60vh]">
+          {history && history.length > 0 ? (
+            <div className="space-y-3">
+              {history.map((h, idx) => (
+                <div key={idx} className="p-4 rounded-lg bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
+                      {h.status}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      <PKTDate dateString={h.changed_at} />
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Changed by: <span className="font-medium">{h.changed_by}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-gray-500">No history available</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImagePreviewModal({ imageId, onClose }: { imageId: string; onClose: () => void }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchImage() {
+      try {
+        const blob = await getGatePassPhotoFile(imageId);
+        if (!isMounted) return;
+        const url = URL.createObjectURL(blob);
+        setImageUrl(url);
+      } catch (error) {
+        console.error("Failed to load image:", error);
+        setImageUrl(null);
+      }
+    }
+    fetchImage();
+    return () => {
+      isMounted = false;
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+    };
+  }, [imageId]);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-4 border-b-2 border-green-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-green-50">
+          <h3 className="text-lg font-bold text-emerald-800">Image Preview</h3>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium"
+          >
+            ✕ Close
+          </button>
+        </div>
+        <div className="p-6 flex items-center justify-center bg-gray-50">
+          {imageUrl ? (
+            <img src={imageUrl} alt="Gatepass photo" className="max-w-full max-h-[70vh] rounded-lg shadow-lg" />
+          ) : (
+            <div className="text-gray-500 text-center">
+              <img
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f3f4f6' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%239ca3af' font-size='16'%3EImage not available%3C/text%3E%3C/svg%3E"
+                alt="Fallback"
+                className="rounded-md"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminGatepassCard({
+  pass,
+  onApprove,
+  onReject,
+  onPrint,
+}: {
+  pass: GatePassOut;
+  onApprove: (pass: GatePassOut) => void;
+  onReject: (pass: GatePassOut) => void;
+  onPrint: (pass: GatePassOut) => void;
+}) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [showExitPhoto, setShowExitPhoto] = useState(false);
+  const [showReturnPhoto, setShowReturnPhoto] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const formatValue = (value: any) => {
+    if (value === null || value === undefined) return "Not Available";
+    if (typeof value === "string" && value.includes("T")) {
+      return new Date(value).toLocaleString();
+    }
+    return value;
+  };
+
+  const isPending = pass.status === "pending";
+
+  return (
+    <>
+      <article className="bg-gradient-to-br from-white to-green-50/30 rounded-xl shadow-md border-2 border-green-100 hover:shadow-xl transition-all duration-300 overflow-hidden">
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-green-100">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold mb-1.5">
+                {pass.number}
+              </div>
+              <h3 className="font-bold text-lg text-gray-800 truncate">{pass.person_name}</h3>
+              <p className="text-xs text-gray-600 mt-1">{pass.description}</p>
+            </div>
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                pass.status === "approved"
+                  ? "bg-green-100 text-green-700"
+                  : pass.status === "pending"
+                  ? "bg-yellow-100 text-yellow-700"
+                  : pass.status === "rejected"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {pass.status.toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2 rounded bg-white border border-green-100">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created</div>
+              <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.created_at} /></p>
+            </div>
+            <div className="p-2 rounded bg-white border border-green-100">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Returnable</div>
+              <p className="text-gray-700">{pass.is_returnable ? "✓ Yes" : "✗ No"}</p>
+            </div>
+            {pass.exit_time && (
+              <div className="p-2 rounded bg-white border border-green-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Exit</div>
+                <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.exit_time} /></p>
+              </div>
+            )}
+            {pass.return_time && (
+              <div className="p-2 rounded bg-white border border-green-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Return</div>
+                <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.return_time} /></p>
+              </div>
+            )}
+          </div>
+
+          {(pass.exit_photo_id || pass.return_photo_id) && (
+            <div className="flex gap-2">
+              {pass.exit_photo_id && (
+                <button
+                  onClick={() => setShowExitPhoto(true)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+                >
+                  Exit Photo
+                </button>
+              )}
+              {pass.return_photo_id && (
+                <button
+                  onClick={() => setShowReturnPhoto(true)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+                >
+                  Return Photo
+                </button>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-all duration-200 flex items-center justify-center gap-1"
+          >
+            {showDetails ? "▲ Hide Details" : "▼ Show Details"}
+          </button>
+
+          {showDetails && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 gap-2 text-xs">
+                <div className="p-2 rounded bg-white border border-green-100">
+                  {pass.status == "rejected" ?
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Rejected By</div> :
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved By</div>
+                  }
+                  {pass.status_history[1] != undefined ?
+                    <p className="text-gray-700">{pass.status_history[1].changed_by.toUpperCase()}</p> :
+                    <p className="text-gray-700">Not Approved</p>
+                  }
+                </div>
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved At</div>
+                  <p className="text-gray-700"><PKTDate dateString={pass.approved_at} /></p>
+                </div>
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">QR Code</div>
+                  <p className="text-gray-700">{formatValue(pass.qr_code_url)}</p>
+                </div>
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Gatepass ID</div>
+                  <p className="text-gray-700 font-mono text-[10px] break-all">{pass.id}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => setShowHistory(true)}
+              className="flex-1 min-w-[100px] px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+            >
+              📋 History
+            </button>
+            <button
+              onClick={() => onPrint(pass)}
+              className="flex-1 min-w-[100px] px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+            >
+              🖨️ Print
+            </button>
+          </div>
+
+          {isPending && (
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => onApprove(pass)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+              >
+                ✓ Approve
+              </button>
+              <button
+                onClick={() => onReject(pass)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-600 to-pink-600 text-white text-sm font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+              >
+                ✗ Reject
+              </button>
+            </div>
+          )}
+        </div>
+      </article>
+
+      {showHistory && <StatusHistoryModal history={pass.status_history} onClose={() => setShowHistory(false)} />}
+      {showExitPhoto && pass.exit_photo_id && (
+        <ImagePreviewModal imageId={pass.exit_photo_id} onClose={() => setShowExitPhoto(false)} />
+      )}
+      {showReturnPhoto && pass.return_photo_id && (
+        <ImagePreviewModal imageId={pass.return_photo_id} onClose={() => setShowReturnPhoto(false)} />
+      )}
+    </>
+  );
+}
+
+export default function AdminGatepass() {
+  useAuthCheck(["omair", "obaid", "mubashir", "rehman", "nazim", "adil", "mustafa", "aqil", "ammar"]);
+  const [passes, setPasses] = useState<GatePassOut[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
+
+  const [role, setRole] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    setRole(localStorage.getItem("role"));
+  }, []);
+
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [numberFilter, setNumberFilter] = useState<string>("");
+  const [nameFilter, setNameFilter] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<GatePassOut[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showDelete, setShowDelete] = useState(true);
+  const [setDelete, setDeleteFn] = useState(false);
+
+  // Debounced name search — fires 500ms after the user stops typing
+  useEffect(() => {
+    if (!nameFilter.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchGatepasses(nameFilter.trim());
+        // API returns a bare array; guard against accidental envelope wrapping
+        const results: GatePassOut[] = Array.isArray(res) ? res : (res as any)?.results ?? (res as any)?.data ?? [];
+        setSearchResults(results);
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail;
+        const text =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+            ? detail.map((d: any) => d.msg ?? JSON.stringify(d)).join(", ")
+            : err?.message ?? "Search failed";
+        setMessage({ type: "error", text });
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nameFilter]);
+
+  // What to render in the results section
+  const displayedPasses = nameFilter.trim() ? searchResults : passes;
+
+  // Pagination — reset to 10 whenever the result set changes
+  const [visibleCount, setVisibleCount] = useState(10);
+  useEffect(() => { setVisibleCount(10); }, [displayedPasses]);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    type: "approve" | "reject" | "delete";
+    pass: GatePassOut | null;
+  }>({ show: false, type: "approve", pass: null });
+
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 5000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  async function fetchGatepasses(status?: string) {
+    setLoading(true);
+    setPasses(null);
+    try {
+      const res = await listAllGatepasses(status || null);
+      setPasses(res || []);
+      setMessage({ type: "success", text: `Loaded ${res.length} gatepass(es)` });
+    } catch (err: any) {
+      console.error(err);
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepasses";
+      setMessage({ type: "error", text: String(text) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchDeletedGatepasses(status?: string) {
+    setLoading(true);
+    setPasses(null);
+    try {
+      const res = await listAllGatepasses(status || null);
+      setPasses(res || []);
+      setMessage({ type: "success", text: `Loaded ${res.length} gatepass(es)` });
+    } catch (err: any) {
+      console.error(err);
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepasses";
+      setMessage({ type: "error", text: String(text) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchByNumber(number: string) {
+    if (!number || number.trim().length === 0) {
+      setMessage({ type: "error", text: "Please provide a gatepass number" });
+      return;
+    }
+    setLoading(true);
+    setPasses(null);
+    try {
+      const res = await getGatepassDetail(number.trim());
+      setPasses([res]);
+      setMessage({ type: "success", text: `Found gatepass: ${res.number}` });
+    } catch (err: any) {
+      console.error(err);
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepass";
+      setMessage({ type: "error", text: String(text) });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePrint(pass: GatePassOut) {
+    const pass_status = getGatepassDetail(pass.number.trim());
+    if ((await pass_status).status == "rejected") {
+      setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
+      return;
+    }
+    try {
+      setMessage({ type: "info", text: "Preparing download..." });
+      const blob = await printGatepass(pass.number);
+      const filename = `${pass.number}.pdf`;
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setMessage({ type: "success", text: `Downloaded ${filename}` });
+    } catch (err: any) {
+      setMessage({ type: "error", text: "Gatepass cannot be printed until approved" });
+    }
+  }
+
+  async function handleApprove(pass: GatePassOut) {
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Approving gatepass by Admin: ${role}...` });
+        const res = await approveGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} approved successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Approval failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+    }
+  }
+
+  function dashboardHandler() {
+    router.replace("/dashboard");
+  }
+
+  async function handleReject(pass: GatePassOut) {
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Rejecting gatepass by Admin: ${role}...` });
+        const res = await rejectGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} rejected successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Rejection failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+    }
+  }
+
+  async function handleDelete(pass: GatePassOut) {
+    if (role != null) {
+      try {
+        setMessage({ type: "info", text: `Deleting gatepass by Admin: ${role}...` });
+        const res = await deleteGatepass(pass.number, role);
+        setMessage({ type: "success", text: `Gatepass ${res.number} deleted successfully!` });
+        fetchGatepasses(statusFilter);
+      } catch (err: any) {
+        console.error(err);
+        const text = err?.response?.data?.detail || err?.message || "Deletion failed";
+        setMessage({ type: "error", text: String(text) });
+      }
+    } else {
+      setMessage({ type: "error", text: "Authentiaction Issue, Please log in again" });
+    }
+  }
+
+  function applyFilters() {
+    if (numberFilter.trim()) {
+      fetchByNumber(numberFilter);
+    } else {
+      fetchGatepasses(statusFilter || undefined);
+    }
+  }
+
+  async function deleteGP() {
+    const pass = numberFilter.trim();
+    try {
+      let p = await getGatepassDetail(pass);
+      setConfirmModal({ show: true, type: "delete", pass: p });
+    } catch {
+      setMessage({ type: "error", text: `Gatepass Not Found` });
+    }
+  }
+
+  return (
+    <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-green-50 via-white to-emerald-50">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-8 text-center">
+          <div className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 mb-4">
+            <span className="text-emerald-800 font-semibold text-sm">ADMIN PORTAL</span>
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-emerald-700 to-green-600 bg-clip-text text-transparent">
+            Gatepass Management
+          </h1>
+          <p className="text-base text-gray-600 mt-3">Review, approve and manage all gatepasses</p>
+        </header>
+
+        <section className="mb-6 flex justify-center">
+          <Message type={message?.type ?? "info"} text={message?.text ?? null} />
+        </section>
+
+        <main className="space-y-6">
+          <section className="bg-white/80 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-xl border border-green-100">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => fetchGatepasses()}
+                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+                >
+                  📋 View All Gatepasses
+                </button>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-lg border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-all duration-200 font-medium text-emerald-800"
+                >
+                  🔍 {showFilters ? "Hide Filters" : "Show Filters"}
+                </button>
+                <div className="flex gap-3 ml-auto">
+                  <button
+                    onClick={() => {
+                      setShowDelete(!showDelete);
+                      if (showDelete) {
+                        fetchDeletedGatepasses("deleted");
+                      } else {
+                        window.location.reload();
+                      }
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-all duration-200 font-medium text-red-800"
+                  >
+                    {!showDelete ? "Hide Deleted" : "View Deleted"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteFn(!setDelete)}
+                    className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+                  >
+                    Delete Gatepass
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => dashboardHandler()}
+                className="w-full sm:w-auto px-6 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-semibold hover:shadow-lg hover:scale-102 transition-all duration-200"
+              >
+                Dashboard and Analytics
+              </button>
+
+              {/* Name Search — always visible, queries the API with debounce */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                    placeholder="Search by person name or description (searches all gatepasses)..."
+                    className="w-full rounded-lg border-2 border-emerald-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none pr-10"
+                  />
+                  {searchLoading && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="animate-spin h-4 w-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+                {nameFilter && (
+                  <button
+                    onClick={() => setNameFilter("")}
+                    className="px-4 py-2.5 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 text-sm font-medium"
+                  >
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
+
+              {setDelete && (
+                <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <h3 className="font-semibold text-gray-700 mb-3">Delete Gatepass by ID</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium w-full text-gray-700 mb-2">Delete Gatepass</label>
+                      <input
+                        type="text"
+                        value={numberFilter}
+                        onChange={(e) => setNumberFilter(e.target.value)}
+                        placeholder="e.g. GP-2025-0001"
+                        className="w-full rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-2">
+                    <button
+                      onClick={() => { setStatusFilter(""); setNumberFilter(""); setPasses(null); }}
+                      className="px-5 py-2 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium text-sm"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={deleteGP}
+                      className="px-5 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-700 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showFilters && (
+                <div className="p-5 rounded-lg bg-gray-50 border-2 border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <h3 className="font-semibold text-gray-700 mb-3">Filter Gatepasses</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                      >
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="returned">Returned</option>
+                        <option value="completed">Completed</option>
+                        <option value="pending_return">Pending Return</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Number</label>
+                      <input
+                        type="text"
+                        value={numberFilter}
+                        onChange={(e) => setNumberFilter(e.target.value)}
+                        placeholder="e.g. GP-2025-0001"
+                        className="w-full rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-4 py-2.5 text-sm transition-all duration-200 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-2">
+                    <button
+                      onClick={() => { setStatusFilter(""); setNumberFilter(""); setPasses(null); }}
+                      className="px-5 py-2 rounded-lg border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium text-sm"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={applyFilters}
+                      className="px-5 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200 text-sm"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            {loading && (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600"></div>
+                <p className="text-sm text-gray-500 mt-4">Loading gatepasses...</p>
+              </div>
+            )}
+
+            {!loading && displayedPasses && displayedPasses.length === 0 && (
+              <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-green-100">
+                <div className="text-6xl mb-4">📭</div>
+                <p className="text-xl text-gray-600 font-medium">
+                  {nameFilter ? `No gatepasses found for "${nameFilter}"` : "No gatepasses found"}
+                </p>
+                <p className="text-sm text-gray-500 mt-2">Try adjusting your filters or create a new gatepass</p>
+              </div>
+            )}
+
+            {!loading && displayedPasses && displayedPasses.length > 0 && (
+              <div className="space-y-6">
+                {nameFilter && (
+                  <p className="text-sm text-gray-500 text-center">
+                    Showing {Math.min(visibleCount, displayedPasses.length)} of {displayedPasses.length} gatepass(es) matching "{nameFilter}"
+                  </p>
+                )}
+                {displayedPasses.slice(0, visibleCount).map((pass) => (
+                  <AdminGatepassCard
+                    key={pass.id}
+                    pass={pass}
+                    onApprove={(p) => setConfirmModal({ show: true, type: "approve", pass: p })}
+                    onReject={(p) => setConfirmModal({ show: true, type: "reject", pass: p })}
+                    onPrint={handlePrint}
+                  />
+                ))}
+                {visibleCount < displayedPasses.length && (
+                  <div className="flex flex-col items-center gap-2 pt-2">
+                    <p className="text-sm text-gray-500">
+                      Showing {visibleCount} of {displayedPasses.length} gatepasses
+                    </p>
+                    <button
+                      onClick={() => setVisibleCount((c) => c + 10)}
+                      className="px-8 py-3 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
+                    >
+                      Show More
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <footer className="text-xs text-gray-500 text-center py-4">
+            Gatepass Management • Made by @Prime AI
+          </footer>
+        </main>
+      </div>
+
+      {confirmModal.show && confirmModal.pass && (
+        <ConfirmModal
+          title={
+            confirmModal.type === "approve"
+              ? "Approve Gatepass"
+              : confirmModal.type === "reject"
+              ? "Reject Gatepass"
+              : "Delete Gatepass"
+          }
+          message={`Are you sure you want to ${confirmModal.type} gatepass ${confirmModal.pass.number} of Person: ${confirmModal.pass.person_name}?`}
+          type={confirmModal.type}
+          onConfirm={() => {
+            if (confirmModal.type === "approve") {
+              handleApprove(confirmModal.pass!);
+            } else if (confirmModal.type === "delete") {
+              handleDelete(confirmModal.pass!);
+            } else {
+              handleReject(confirmModal.pass!);
+            }
+            setConfirmModal({ show: false, type: "approve", pass: null });
+          }}
+          onCancel={() => setConfirmModal({ show: false, type: "approve", pass: null })}
+        />
+      )}
+    </div>
+  );
+}
