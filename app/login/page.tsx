@@ -13,12 +13,18 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Master portal auto-login via token
-  useEffect(() => {
+  // Master portal auto-login via token — runs before render
+  if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     if (params.get("token") === MASTER_TOKEN) {
       localStorage.setItem("role", "admin");
       localStorage.setItem("username", "master");
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("token") === MASTER_TOKEN) {
       router.replace("/admin");
     }
   }, [router]);
