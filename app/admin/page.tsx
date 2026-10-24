@@ -373,7 +373,7 @@ export default function AdminGatepass() {
   const router = useRouter();
 
   useEffect(() => {
-    setRole(localStorage.getItem("role"));
+    setRole(localStorage.getItem("username") || localStorage.getItem("role"));
   }, []);
 
   // Filter states
