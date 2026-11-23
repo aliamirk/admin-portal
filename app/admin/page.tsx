@@ -10,6 +10,7 @@ import {
   printGatepass,
   GatePassOut,
   getGatePassPhotoFile,
+  getGatePassPhotos,
   deleteGatepass,
 } from "../../backend/admin";
 import useAuthCheck from "@/lib/useAuthCheck";
@@ -183,6 +184,23 @@ function ImagePreviewModal({ imageId, onClose }: { imageId: string; onClose: () 
   );
 }
 
+function GalleryPhotoItem({ photo, idx }: { photo: { photo_id: string; type: string }; idx: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    getGatePassPhotoFile(photo.photo_id).then(blob => { if (mounted) setUrl(URL.createObjectURL(blob)); }).catch(() => {});
+    return () => { mounted = false; };
+  }, [photo.photo_id]);
+  return (
+    <div className="relative rounded-lg overflow-hidden border-2 border-green-100">
+      {url ? <img src={url} alt={`Photo ${idx+1}`} className="w-full h-40 object-cover" /> : <div className="w-full h-40 bg-gray-100 flex items-center justify-center"><div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-200 border-t-emerald-600"></div></div>}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 flex justify-between">
+        <span>#{idx+1}</span><span className="text-yellow-300">{photo.type.toUpperCase()}</span>
+      </div>
+    </div>
+  );
+}
+
 function AdminGatepassCard({
   pass,
   onApprove,
@@ -195,9 +213,29 @@ function AdminGatepassCard({
   onPrint: (pass: GatePassOut) => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
-  const [showExitPhoto, setShowExitPhoto] = useState(false);
-  const [showReturnPhoto, setShowReturnPhoto] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [galleryPhotos, setGalleryPhotos] = useState<{ photo_id: string; type: string }[] | null>(null);
+  const [galleryType, setGalleryType] = useState<string | null>(null);
+  const [photosLoading, setPhotosLoading] = useState<string | null>(null);
+  const [showGallery, setShowGallery] = useState(false);
+
+  const TABS = [
+    { key: "inhouse_challan",     label: "Inhouse Challan"     },
+    { key: "weighbridge_challan", label: "Weighbridge Challan" },
+    { key: "vehicle_image",       label: "Vehicle Image"       },
+    { key: "misc",                label: "Misc"                },
+    { key: "return",              label: "Return"              },
+  ];
+
+  async function handleViewPhotos(type: string) {
+    setPhotosLoading(type);
+    try {
+      const all = await getGatePassPhotos(pass.number);
+      const filtered = all.filter(p => p.type === type);
+      setGalleryPhotos(filtered); setGalleryType(type); setShowGallery(true);
+    } catch { setGalleryPhotos([]); setGalleryType(type); setShowGallery(true); }
+    finally { setPhotosLoading(null); }
+  }
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return "Not Available";
@@ -261,26 +299,14 @@ function AdminGatepassCard({
             )}
           </div>
 
-          {(pass.exit_photo_id || pass.return_photo_id) && (
-            <div className="flex gap-2">
-              {pass.exit_photo_id && (
-                <button
-                  onClick={() => setShowExitPhoto(true)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
-                >
-                  Exit Photo
-                </button>
-              )}
-              {pass.return_photo_id && (
-                <button
-                  onClick={() => setShowReturnPhoto(true)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
-                >
-                  Return Photo
-                </button>
-              )}
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-1">
+            {TABS.map(tab => (
+              <button key={tab.key} onClick={() => handleViewPhotos(tab.key)} disabled={photosLoading === tab.key}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-medium hover:shadow-md transition-all disabled:opacity-50 ${tab.key === "return" ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white col-span-2" : "bg-gradient-to-r from-emerald-600 to-green-600 text-white"}`}>
+                {photosLoading === tab.key ? "Loading..." : tab.label}
+              </button>
+            ))}
+          </div>
 
           <button
             onClick={() => setShowDetails(!showDetails)}
@@ -353,11 +379,26 @@ function AdminGatepassCard({
       </article>
 
       {showHistory && <StatusHistoryModal history={pass.status_history} onClose={() => setShowHistory(false)} />}
-      {showExitPhoto && pass.exit_photo_id && (
-        <ImagePreviewModal imageId={pass.exit_photo_id} onClose={() => setShowExitPhoto(false)} />
-      )}
-      {showReturnPhoto && pass.return_photo_id && (
-        <ImagePreviewModal imageId={pass.return_photo_id} onClose={() => setShowReturnPhoto(false)} />
+
+      {showGallery && galleryPhotos !== null && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-emerald-800">{galleryType ? (TABS.find(t => t.key === galleryType)?.label ?? galleryType) : ""} Photos — {pass.number}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{galleryPhotos.length} photo{galleryPhotos.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => setShowGallery(false)} className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 text-sm font-medium">Close</button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {galleryPhotos.length === 0 ? <p className="text-center text-gray-500 py-8">No photos found</p> : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {galleryPhotos.map((photo, idx) => <GalleryPhotoItem key={photo.photo_id} photo={photo} idx={idx} />)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
